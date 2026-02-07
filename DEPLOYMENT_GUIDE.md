@@ -1,3 +1,27 @@
+# ⚠️ CRITICAL SECURITY ALERT - Service Role JWT Exposed
+
+**IMPORTANT**: A Supabase Service Role JWT has been exposed in this repository. If you haven't already done so, you MUST:
+
+1. **Immediately rotate your Service Role Key** in Supabase:
+   - Go to [Supabase Dashboard](https://supabase.com/dashboard)
+   - Navigate to **Settings** → **API**
+   - Click "Regenerate" next to "service_role secret"
+   - Copy the new key immediately
+
+2. **Update environment variables** in Vercel with the new key
+
+3. **Review your Supabase project** for any unauthorized access:
+   - Check Authentication → Users for any suspicious accounts
+   - Review Database → Replication for any unauthorized changes
+   - Check Storage for any unauthorized files
+
+4. **Consider enabling additional security measures**:
+   - Enable 2FA on your Supabase account
+   - Review API keys and rotate any that may have been compromised
+   - Enable audit logging if available
+
+---
+
 # Deployment & Admin Setup Guide for Jhansel Cement Pots
 
 ## Deploying to Vercel
@@ -145,11 +169,34 @@ const login = async (email, password) => {
 
 ## Security Recommendations
 
+### ⚠️ CRITICAL: Protect Your Service Role Key
+
+The Service Role Key provides **full access** to your Supabase project, including:
+- Bypassing Row Level Security (RLS)
+- Access to all data in all tables
+- Managing users and authentication
+- Modifying database schema
+
+**NEVER**:
+- ❌ Commit the service role key to version control
+- ❌ Expose it in client-side JavaScript code
+- ❌ Share it in chat, email, or other communication channels
+- ❌ Store it in public repositories
+
+**ALWAYS**:
+- ✅ Store it in environment variables only
+- ✅ Use server-side code for operations requiring service role
+- ✅ Rotate the key immediately if it's ever exposed
+
+### General Security Best Practices
+
 1. **Use strong passwords** for admin accounts
 2. **Enable 2FA** in Supabase authentication settings
 3. **Limit admin users** to 2-3 trusted people
 4. **Regularly audit** admin users and remove inactive ones
 5. **Use service role key** only in server-side code (never expose in frontend)
+6. **Rotate keys** immediately if exposed or suspected compromised
+7. **Monitor** authentication logs for suspicious activity
 
 ## Need Help?
 
