@@ -25,6 +25,18 @@ const AdminDashboard = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    category: "",
+    description: "",
+    price: "",
+    in_stock: true,
+  });
+  const [editImagePreview, setEditImagePreview] = useState(null);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -276,6 +288,128 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleSelectProduct = (productId) => {
+    setSelectedProducts((prev) =>
+      prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId],
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedProducts.length === products.length) {
+      setSelectedProducts([]);
+    } else {
+      setSelectedProducts(products.map((p) => p.id));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedProducts.length === 0) return;
+
+    try {
+      setError("");
+      const supabaseAdmin = getServiceRoleClient();
+
+      // Delete images and records for selected products
+      const productsToDelete = products.filter((p) => selectedProducts.includes(p.id));
+
+      for (const product of productsToDelete) {
+        if (product.image_url) {
+          try {
+            const urlParts = product.image_url.split(
+              "/storage/v1/object/public/product/",
+            );
+            if (urlParts.length === 2) {
+              const fileName = urlParts[1];
+              await supabase.storage.from("product").remove([fileName]);
+            }
+          } catch (imgErr) {
+            console.error("Error deleting image from storage:", imgErr);
+          }
+        }
+      }
+
+      const { error } = await supabaseAdmin
+        .from("products")
+        .delete()
+        .in("id", selectedProducts);
+
+      if (error) throw error;
+
+      setProducts(products.filter((p) => !selectedProducts.includes(p.id)));
+      setSelectedProducts([]);
+      setShowBulkDeleteModal(false);
+    } catch (err) {
+      console.error("Error deleting products:", err);
+      setError("Failed to delete products: " + err.message);
+    }
+  };
+
+  const handleEditClick = (product) => {
+    setEditingProduct(product);
+    setEditForm({
+      name: product.name,
+      category: product.category,
+      description: product.description,
+      price: product.price ? product.price.toString() : "",
+      in_stock: product.in_stock,
+    });
+    setEditImagePreview(product.image_url);
+    setShowEditModal(true);
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!editForm.name || !editForm.category || !editForm.description) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      setError("");
+      const supabaseAdmin = getServiceRoleClient();
+
+      const productData = {
+        name: editForm.name,
+        category: editForm.category,
+        description: editForm.description,
+        price: editForm.price ? parseFloat(editForm.price) : null,
+        in_stock: editForm.in_stock,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabaseAdmin
+        .from("products")
+        .update(productData)
+        .eq("id", editingProduct.id);
+
+      if (error) throw error;
+
+      setProducts(
+        products.map((p) =>
+          p.id === editingProduct.id ? { ...p, ...productData } : p,
+        ),
+      );
+      setShowEditModal(false);
+      setEditingProduct(null);
+      setShowSuccessModal(true);
+    } catch (err) {
+      console.error("Error updating product:", err);
+      setError("Failed to update product: " + err.message);
+    }
+  };
+
+  const handleEditImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setEditImagePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="pt-16 min-h-screen flex items-center justify-center">
@@ -314,6 +448,166 @@ const AdminDashboard = () => {
                   Delete
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-center">
+              <span className="fas fa-exclamation-triangle text-red-500 text-5xl mb-4 block"></span>
+              <h3 className="text-xl font-bold mb-2">Delete {selectedProducts.length} Products</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete {selectedProducts.length} products? This
+                action cannot be undone.
+              </p>
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Delete All
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Edit Product</h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingProduct(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <span className="fas fa-times text-xl"></span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Product Name *
+                </label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="Enter product name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category *
+                </label>
+                <select
+                  value={editForm.category}
+                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                >
+                  <option value="">Select category</option>
+                  <option value="Traditional">Traditional</option>
+                  <option value="Contemporary">Contemporary</option>
+                  <option value="Hanging">Hanging</option>
+                  <option value="Specialty">Specialty</option>
+                  <option value="Modern">Modern</option>
+                  <option value="Miniature">Miniature</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Price
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editForm.price}
+                  onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description *
+              </label>
+              <textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                rows="3"
+                placeholder="Enter product description"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Product Image
+              </label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                {editImagePreview ? (
+                  <div className="relative inline-block">
+                    <img
+                      src={editImagePreview}
+                      alt="Preview"
+                      className="max-w-[200px] max-h-[200px] object-contain rounded-lg"
+                    />
+                    <p className="text-sm text-gray-500 mt-2">Image cannot be changed in edit mode</p>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No image</p>
+                )}
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={editForm.in_stock}
+                  onChange={(e) => setEditForm({ ...editForm, in_stock: e.target.checked })}
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <span className="ml-2 text-sm text-gray-700">In Stock</span>
+              </label>
+            </div>
+
+            <div className="flex gap-4 justify-end">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingProduct(null);
+                }}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateProduct}
+                className="bg-primary hover:bg-blue-800 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                <span className="fas fa-check mr-2"></span>
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
@@ -518,7 +812,18 @@ const AdminDashboard = () => {
           )}
 
           {/* Products Table */}
-          <div className="overflow-x-auto mt-6">
+          <div className="flex justify-between items-center mb-4">
+            {selectedProducts.length > 0 && (
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <span className="fas fa-trash mr-2"></span>
+                Delete Selected ({selectedProducts.length})
+              </button>
+            )}
+          </div>
+          <div className="overflow-x-auto mt-2">
             {loading ? (
               <div className="text-center py-8">
                 <span className="fas fa-spinner fa-spin text-primary text-3xl"></span>
@@ -533,6 +838,14 @@ const AdminDashboard = () => {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-100 text-left">
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-700 w-12">
+                      <input
+                        type="checkbox"
+                        checked={products.length > 0 && selectedProducts.length === products.length}
+                        onChange={handleSelectAll}
+                        className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+                      />
+                    </th>
                     <th className="px-4 py-3 text-sm font-semibold text-gray-700">
                       Image
                     </th>
@@ -557,8 +870,18 @@ const AdminDashboard = () => {
                   {products.map((product) => (
                     <tr
                       key={product.id}
-                      className="border-t border-gray-200 hover:bg-gray-50"
+                      className={`border-t border-gray-200 hover:bg-gray-50 ${
+                        selectedProducts.includes(product.id) ? "bg-blue-50" : ""
+                      }`}
                     >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedProducts.includes(product.id)}
+                          onChange={() => handleSelectProduct(product.id)}
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         {product.image_url ? (
                           <img
@@ -591,12 +914,22 @@ const AdminDashboard = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleDeleteClick(product)}
-                          className="text-red-500 hover:text-red-700 transition-colors"
-                        >
-                          <span className="fas fa-trash"></span>
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditClick(product)}
+                            className="text-primary hover:text-blue-800 transition-colors"
+                            title="Edit"
+                          >
+                            <span className="fas fa-edit"></span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(product)}
+                            className="text-red-500 hover:text-red-700 transition-colors"
+                            title="Delete"
+                          >
+                            <span className="fas fa-trash"></span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
