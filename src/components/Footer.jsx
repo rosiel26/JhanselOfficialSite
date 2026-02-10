@@ -11,12 +11,7 @@ const Footer = () => {
       { to: "/products", label: "Products", icon: "fas fa-box" },
       { to: "/contact", label: "Contact", icon: "fas fa-envelope" },
     ],
-    categories: [
-      { to: "/products", label: "Traditional Pots" },
-      { to: "/products", label: "Modern Designs" },
-      { to: "/products", label: "Hanging Baskets" },
-      { to: "/products", label: "Custom Orders" },
-    ],
+  
     support: [
       { to: "/contact", label: "FAQ" },
       { to: "/contact", label: "Shipping Info" },
@@ -33,28 +28,29 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-dark text-white">
+    <footer className="bg-black text-white">
       {/* Main Footer */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 ">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
           {/* Brand Section */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center mb-6 group">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary-light rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300">
-                <span className="text-white font-bold text-xl">JC</span>
+              <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-md transition-all duration-300 group-hover:scale-105">
+                <span className="text-black font-bold text-lg">JS</span>
               </div>
               <div className="ml-3">
-                <span className="text-xl font-bold font-display">
-                  Jhansel Cement Pots
+                <span className="text-lg font-semibold font-display">
+                  Jhansel
                 </span>
-                <span className="block text-xs text-gray-400 -mt-1">
-                  Manufacturing
+                <span className="block text-xs text-gray-400 tracking-wide">
+                   CEMENT POTS MANUFACTURING
                 </span>
               </div>
             </Link>
             <p className="text-gray-400 mb-6 leading-relaxed max-w-sm">
               Crafting beautiful, durable cement pots since 2010. Handcrafted
-              with passion and precision to transform your outdoor spaces.
+              with passion and precision to transform your outdoor spaces into
+              stunning green havens.
             </p>
             <div className="flex space-x-3">
               {socialLinks.map((social, index) => (
@@ -62,7 +58,7 @@ const Footer = () => {
                   key={index}
                   href={social.href}
                   aria-label={social.label}
-                  className="w-10 h-10 bg-gray-800 hover:bg-primary rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                  className="w-10 h-10 bg-gray-800 hover:bg-green-600 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                 >
                   <i className={social.icon}></i>
                 </a>
@@ -72,8 +68,8 @@ const Footer = () => {
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold mb-6 flex items-center">
-              <span className="w-2 h-2 bg-primary rounded-full mr-3"></span>
+            <h3 className="text-base font-semibold mb-6 flex items-center text-white">
+              <span className="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
               Quick Links
             </h3>
             <ul className="space-y-3">
@@ -81,9 +77,9 @@ const Footer = () => {
                 <li key={index}>
                   <Link
                     to={link.to}
-                    className="text-gray-400 hover:text-white transition-colors flex items-center group"
+                    className="footer-link"
                   >
-                    <i className={`${link.icon} mr-2 text-sm opacity-50 group-hover:opacity-100 transition-opacity`}></i>
+                    <i className={link.icon}></i>
                     {link.label}
                   </Link>
                 </li>
@@ -91,79 +87,33 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Categories */}
-          <div>
-            <h3 className="text-lg font-semibold mb-6 flex items-center">
-              <span className="w-2 h-2 bg-secondary rounded-full mr-3"></span>
-              Categories
-            </h3>
-            <ul className="space-y-3">
-              {footerLinks.categories.map((link, index) => (
-                <li key={index}>
-                  <Link
-                    to={link.to}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+         
 
           {/* Contact Info */}
           <div>
-            <h3 className="text-lg font-semibold mb-6 flex items-center">
+            <h3 className="text-base font-semibold mb-6 flex items-center text-white">
               <span className="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
               Contact Us
             </h3>
             <ul className="space-y-4 text-gray-400">
               <li className="flex items-start">
-                <i className="fas fa-map-marker-alt mt-1 mr-3 text-primary"></i>
-                <span>123 Cement Pot Street Manila, Philippines</span>
+                <i className="fas fa-map-marker-alt mt-1 mr-3 text-green-500"></i>
+                <span>Purok II, Tinago, Dauis, Bohol, Philippines</span>
               </li>
               <li className="flex items-center">
-                <i className="fas fa-phone-alt mr-3 text-primary"></i>
-                <span>+63 917 123 4567</span>
+                <i className="fas fa-phone-alt mr-3 text-green-500"></i>
+                <span>+63 928 316 3650</span>
               </li>
               <li className="flex items-center">
-                <i className="fas fa-envelope mr-3 text-primary"></i>
-                <span>info@jhanselcementpots.com</span>
-              </li>
-              <li className="flex items-center">
-                <i className="fas fa-clock mr-3 text-primary"></i>
-                <span>Mon - Sat: 8AM - 6PM</span>
+                <i className="fas fa-clock mr-3 text-green-500"></i>
+                <span>Mon - Sun: 8AM - 6PM</span>
               </li>
             </ul>
           </div>
         </div>
       </div>
 
-      {/* Newsletter Section */}
-      <div className="bg-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="text-center md:text-left">
-              <h4 className="font-semibold text-lg mb-1">
-                Subscribe to Our Newsletter
-              </h4>
-              <p className="text-gray-400 text-sm">
-                Get updates on new products and special offers
-              </p>
-            </div>
-            <div className="flex w-full md:w-auto">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="flex-1 md:w-64 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-xl text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
-              />
-              <button className="px-6 py-3 bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-white font-semibold rounded-r-xl transition-all duration-300">
-                <i className="fas fa-paper-plane"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+    
 
       {/* Bottom Bar */}
       <div className="border-t border-gray-800">

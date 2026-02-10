@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase, getServiceRoleClient } from "../lib/supabase";
+import Draggable, { DraggableFrame } from "../components/Draggable";
 
 const AdminDashboard = () => {
   const { isAuthenticated, loading: authLoading, logout } = useAuth();
@@ -15,13 +16,22 @@ const AdminDashboard = () => {
     price: "",
     in_stock: true,
   });
-  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
+  // Image framing state
+  const [imageFrame, setImageFrame] = useState({
+    x: 0,
+    y: 0,
+    scale: 1,
+  });
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const imageContainerRef = useRef(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -37,8 +47,33 @@ const AdminDashboard = () => {
     in_stock: true,
   });
   const [editImagePreview, setEditImagePreview] = useState(null);
+  // Edit image upload state
+  const [editSelectedImage, setEditSelectedImage] = useState(null);
+  const [editImagePreviews, setEditImagePreviews] = useState([]);
+  const [editSelectedImages, setEditSelectedImages] = useState([]);
+  const [editDragActive, setEditDragActive] = useState(false);
+  const editFileInputRef = useRef(null);
+  // Image dimensions for constraint calculations
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [editImageDimensions, setEditImageDimensions] = useState({ width: 0, height: 0 });
+  // Edit image framing state
+  const [editImageFrame, setEditImageFrame] = useState({
+    x: 0,
+    y: 0,
+    scale: 1,
+  });
+  const [isDraggingEditImage, setIsDraggingEditImage] = useState(false);
+  const [editDragStart, setEditDragStart] = useState({ x: 0, y: 0 });
+  const editImageContainerRef = useRef(null);
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
 
-  useEffect(() => {
+   
+
+useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       navigate("/login");
       return;
@@ -65,6 +100,18 @@ const AdminDashboard = () => {
       setLoading(false);
     }
   };
+
+  // Filter products based on search query
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const query = searchQuery.toLowerCase();
+      return (
+        product.name?.toLowerCase().includes(query) ||
+        product.category?.toLowerCase().includes(query) ||
+        product.description?.toLowerCase().includes(query)
+      );
+    });
+  }, [products, searchQuery]);
 
   const compressImage = (file, maxSizeKB = 150, maxWidth = 800) => {
     return new Promise((resolve) => {
@@ -102,33 +149,48 @@ const AdminDashboard = () => {
     });
   };
 
-  const handleFileSelect = async (file) => {
-    if (!file) return;
+ const handleFileSelect = async (files) => {
+  if (!files || files.length === 0) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file");
-      return;
-    }
+  const fileArray = Array.from(files);
+  const validFiles = fileArray.filter(file => file.type.startsWith("image/"));
 
-    try {
-      setUploading(true);
-      setError("");
+  if (validFiles.length === 0) {
+    setError("Please select image files");
+    return;
+  }
 
+  try {
+    setUploading(true);
+    setError("");
+
+    const newPreviews = [];
+    const newImages = [];
+
+    for (const file of validFiles) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target.result);
-      };
-      reader.readAsDataURL(file);
+      const previewPromise = new Promise((resolve) => {
+        reader.onload = (e) => {
+          newPreviews.push(e.target.result);
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+      await previewPromise;
 
       const compressedImage = await compressImage(file, 150, 800);
-      setSelectedImage(compressedImage);
-    } catch (err) {
-      console.error("Error processing image:", err);
-      setError("Failed to process image");
-    } finally {
-      setUploading(false);
+      newImages.push(compressedImage);
     }
-  };
+
+    setImagePreviews([...imagePreviews, ...newPreviews]);
+    setSelectedImages([...selectedImages, ...newImages]);
+  } catch (err) {
+    console.error("Error processing images:", err);
+    setError("Failed to process images");
+  } finally {
+    setUploading(false);
+  }
+};
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -145,15 +207,13 @@ const AdminDashboard = () => {
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileSelect(e.dataTransfer.files);
     }
   };
 
   const handleDropZoneClick = () => {
-    if (!imagePreview) {
-      fileInputRef.current?.click();
-    }
+    fileInputRef.current?.click();
   };
 
   const uploadImage = async (imageData, productId) => {
@@ -193,10 +253,13 @@ const AdminDashboard = () => {
       setUploading(true);
       const supabaseAdmin = getServiceRoleClient();
 
-      let imageUrl = null;
-      if (selectedImage) {
+      let imageUrls = [];
+      if (selectedImages.length > 0) {
         const tempId = Date.now();
-        imageUrl = await uploadImage(selectedImage, tempId);
+        for (let i = 0; i < selectedImages.length; i++) {
+          const imageUrl = await uploadImage(selectedImages[i], `${tempId}-${i}`);
+          imageUrls.push(imageUrl);
+        }
       }
 
       const productData = {
@@ -205,7 +268,7 @@ const AdminDashboard = () => {
         description: newProduct.description,
         price: newProduct.price ? parseFloat(newProduct.price) : null,
         in_stock: newProduct.in_stock,
-        image_url: imageUrl,
+        image_url: imageUrls.length > 0 ? imageUrls.join(',') : null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -226,9 +289,9 @@ const AdminDashboard = () => {
         price: "",
         in_stock: true,
       });
-      setSelectedImage(null);
-      setImagePreview(null);
-      setIsAddingProduct(false);
+      setSelectedImages([]);
+      setImagePreviews([]);
+      setShowAddModal(false);
       setShowSuccessModal(true);
     } catch (err) {
       console.error("Error adding product:", err);
@@ -279,14 +342,201 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleRemoveImage = (e) => {
-    e.stopPropagation();
-    setSelectedImage(null);
-    setImagePreview(null);
+  const handleRemoveImage = (index) => {
+    setSelectedImages(selectedImages.filter((_, i) => i !== index));
+    setImagePreviews(imagePreviews.filter((_, i) => i !== index));
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
+
+  // Image framing controls
+  const FRAME_WIDTH = 280;
+  const FRAME_HEIGHT = 256;
+
+  const handleImageDragStart = (e) => {
+    if (!imagePreviews || imagePreviews.length === 0) return;
+    
+    // Get pointer position (mouse or touch)
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    setIsDraggingImage(true);
+    setDragStart({
+      x: clientX - imageFrame.x,
+      y: clientY - imageFrame.y,
+    });
+  };
+
+  const handleImageDrag = useCallback(
+    (e) => {
+      if (!isDraggingImage || !imagePreviews || imagePreviews.length === 0 || !imageDimensions.width) return;
+      if (e.cancelable) e.preventDefault();
+      
+      // Get pointer position (mouse or touch)
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const newX = clientX - dragStart.x;
+      const newY = clientY - dragStart.y;
+
+      // Calculate scaled dimensions
+      const imgRatio = imageDimensions.width / imageDimensions.height;
+      const frameRatio = FRAME_WIDTH / FRAME_HEIGHT;
+
+      let scaledWidth, scaledHeight;
+      if (imgRatio > frameRatio) {
+        scaledHeight = FRAME_HEIGHT * imageFrame.scale;
+        scaledWidth = scaledHeight * imgRatio;
+      } else {
+        scaledWidth = FRAME_WIDTH * imageFrame.scale;
+        scaledHeight = scaledWidth / imgRatio;
+      }
+
+      // Constrain to keep image within viewport
+      const maxX = 0;
+      const maxY = 0;
+      const minX = FRAME_WIDTH - scaledWidth;
+      const minY = FRAME_HEIGHT - scaledHeight;
+
+      setImageFrame((prev) => ({
+        ...prev,
+        x: Math.min(Math.max(newX, minX), maxX),
+        y: Math.min(Math.max(newY, minY), maxY),
+      }));
+    },
+    [isDraggingImage, dragStart, imagePreviews, imageFrame.scale, imageDimensions],
+  );
+
+  const handleImageDragEnd = () => {
+    setIsDraggingImage(false);
+  };
+
+  const handleZoomIn = () => {
+    setImageFrame((prev) => ({
+      ...prev,
+      scale: Math.min(prev.scale + 0.25, 3),
+    }));
+  };
+
+  const handleZoomOut = () => {
+    setImageFrame((prev) => ({
+      ...prev,
+      scale: Math.max(prev.scale - 0.25, 0.5),
+    }));
+  };
+
+  const handleResetFrame = () => {
+    setImageFrame({ x: 0, y: 0, scale: 1 });
+  };
+
+  // Edit image framing controls
+  const handleEditImageDragStart = (e) => {
+    if (!editImagePreview) return;
+    
+    // Get pointer position (mouse or touch)
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    setIsDraggingEditImage(true);
+    setEditDragStart({
+      x: clientX - editImageFrame.x,
+      y: clientY - editImageFrame.y,
+    });
+  };
+
+  const handleEditImageDrag = useCallback(
+    (e) => {
+      if (!isDraggingEditImage || !editImagePreview || !editImageDimensions.width) return;
+      if (e.cancelable) e.preventDefault();
+      
+      // Get pointer position (mouse or touch)
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const newX = clientX - editDragStart.x;
+      const newY = clientY - editDragStart.y;
+
+      // Calculate scaled dimensions
+      const imgRatio = editImageDimensions.width / editImageDimensions.height;
+      const frameRatio = FRAME_WIDTH / FRAME_HEIGHT;
+
+      let scaledWidth, scaledHeight;
+      if (imgRatio > frameRatio) {
+        scaledHeight = FRAME_HEIGHT * editImageFrame.scale;
+        scaledWidth = scaledHeight * imgRatio;
+      } else {
+        scaledWidth = FRAME_WIDTH * editImageFrame.scale;
+        scaledHeight = scaledWidth / imgRatio;
+      }
+
+      // Constrain to keep image within viewport
+      const maxX = 0;
+      const maxY = 0;
+      const minX = FRAME_WIDTH - scaledWidth;
+      const minY = FRAME_HEIGHT - scaledHeight;
+
+      setEditImageFrame((prev) => ({
+        ...prev,
+        x: Math.min(Math.max(newX, minX), maxX),
+        y: Math.min(Math.max(newY, minY), maxY),
+      }));
+    },
+    [isDraggingEditImage, editDragStart, editImagePreview, editImageFrame.scale, editImageDimensions],
+  );
+
+  const handleEditImageDragEnd = () => {
+    setIsDraggingEditImage(false);
+  };
+
+  const handleEditZoomIn = () => {
+    setEditImageFrame((prev) => ({
+      ...prev,
+      scale: Math.min(prev.scale + 0.25, 3),
+    }));
+  };
+
+  const handleEditZoomOut = () => {
+    setEditImageFrame((prev) => ({
+      ...prev,
+      scale: Math.max(prev.scale - 0.25, 0.5),
+    }));
+  };
+
+  const handleEditResetFrame = () => {
+    setEditImageFrame({ x: 0, y: 0, scale: 1 });
+  };
+
+  // Global mouse/touch event listeners for dragging
+  useEffect(() => {
+    if (isDraggingImage) {
+      window.addEventListener("mousemove", handleImageDrag);
+      window.addEventListener("mouseup", handleImageDragEnd);
+      window.addEventListener("touchmove", handleImageDrag, { passive: false });
+      window.addEventListener("touchend", handleImageDragEnd);
+      return () => {
+        window.removeEventListener("mousemove", handleImageDrag);
+        window.removeEventListener("mouseup", handleImageDragEnd);
+        window.removeEventListener("touchmove", handleImageDrag);
+        window.removeEventListener("touchend", handleImageDragEnd);
+      };
+    }
+  }, [isDraggingImage, handleImageDrag]);
+
+  useEffect(() => {
+    if (isDraggingEditImage) {
+      window.addEventListener("mousemove", handleEditImageDrag);
+      window.addEventListener("mouseup", handleEditImageDragEnd);
+      window.addEventListener("touchmove", handleEditImageDrag, { passive: false });
+      window.addEventListener("touchend", handleEditImageDragEnd);
+      return () => {
+        window.removeEventListener("mousemove", handleEditImageDrag);
+        window.removeEventListener("mouseup", handleEditImageDragEnd);
+        window.removeEventListener("touchmove", handleEditImageDrag);
+        window.removeEventListener("touchend", handleEditImageDragEnd);
+      };
+    }
+  }, [isDraggingEditImage, handleEditImageDrag]);
 
   const handleSelectProduct = (productId) => {
     setSelectedProducts((prev) =>
@@ -297,10 +547,11 @@ const AdminDashboard = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectedProducts.length === products.length) {
+    const productsToSelect = searchQuery ? filteredProducts : products;
+    if (selectedProducts.length === productsToSelect.length) {
       setSelectedProducts([]);
     } else {
-      setSelectedProducts(products.map((p) => p.id));
+      setSelectedProducts(productsToSelect.map((p) => p.id));
     }
   };
 
@@ -345,19 +596,70 @@ const AdminDashboard = () => {
       setError("Failed to delete products: " + err.message);
     }
   };
+const getCoverSize = (imgW, imgH, frameW, frameH, scale = 1) => {
+  const imgRatio = imgW / imgH;
+  const frameRatio = frameW / frameH;
+
+  let w, h;
+  if (imgRatio > frameRatio) {
+    h = frameH * scale;
+    w = h * imgRatio;
+  } else {
+    w = frameW * scale;
+    h = w / imgRatio;
+  }
+  return { w, h };
+};
+
+
 
   const handleEditClick = (product) => {
-    setEditingProduct(product);
-    setEditForm({
-      name: product.name,
-      category: product.category,
-      description: product.description,
-      price: product.price ? product.price.toString() : "",
-      in_stock: product.in_stock,
-    });
-    setEditImagePreview(product.image_url);
-    setShowEditModal(true);
-  };
+  setEditingProduct(product);
+
+  setEditForm({
+    name: product.name,
+    category: product.category,
+    description: product.description,
+    price: product.price ? product.price.toString() : "",
+    in_stock: product.in_stock,
+  });
+
+  // Parse multiple images from comma-separated string
+  let images = [];
+  if (product.image_url) {
+    if (product.image_url.includes(',')) {
+      images = product.image_url.split(',').map(url => url.trim()).filter(url => url);
+    } else {
+      images = [product.image_url];
+    }
+  }
+
+  setEditImagePreviews(images);
+  setEditSelectedImages([]);
+  setEditSelectedImage(null);
+  setEditImageFrame({ x: 0, y: 0, scale: 1 });
+
+  // Set the first image as the preview for the framing controls
+  if (images.length > 0) {
+    setEditImagePreview(images[0]);
+    const img = new Image();
+    img.src = images[0];
+    img.onload = () => {
+      const dims = { width: img.width, height: img.height };
+      setEditImageDimensions(dims);
+
+      // center it (cover-size centered)
+      const { w, h } = getCoverSize(dims.width, dims.height, FRAME_WIDTH, FRAME_HEIGHT, 1);
+      setEditImageFrame({ x: (FRAME_WIDTH - w) / 2, y: (FRAME_HEIGHT - h) / 2, scale: 1 });
+    };
+  } else {
+    setEditImagePreview(null);
+    setEditImageDimensions({ width: 0, height: 0 });
+  }
+
+  setShowEditModal(true);
+};
+
 
   const handleUpdateProduct = async () => {
     if (!editForm.name || !editForm.category || !editForm.description) {
@@ -367,7 +669,38 @@ const AdminDashboard = () => {
 
     try {
       setError("");
+      setUploading(true);
       const supabaseAdmin = getServiceRoleClient();
+
+      let imageUrls = [...editImagePreviews];
+
+      // Upload new images if selected
+      if (editSelectedImages.length > 0) {
+        // Delete old images if exists
+        if (editingProduct.image_url) {
+          try {
+            const oldImages = editingProduct.image_url.includes(',')
+              ? editingProduct.image_url.split(',').map(url => url.trim())
+              : [editingProduct.image_url];
+            
+            for (const oldImageUrl of oldImages) {
+              const urlParts = oldImageUrl.split("/storage/v1/object/public/product/");
+              if (urlParts.length === 2) {
+                const fileName = urlParts[1];
+                await supabase.storage.from("product").remove([fileName]);
+              }
+            }
+          } catch (imgErr) {
+            console.error("Error deleting old images:", imgErr);
+          }
+        }
+        // Upload new images
+        const tempId = Date.now();
+        for (let i = 0; i < editSelectedImages.length; i++) {
+          const imageUrl = await uploadImage(editSelectedImages[i], `${tempId}-${i}`);
+          imageUrls.push(imageUrl);
+        }
+      }
 
       const productData = {
         name: editForm.name,
@@ -375,6 +708,7 @@ const AdminDashboard = () => {
         description: editForm.description,
         price: editForm.price ? parseFloat(editForm.price) : null,
         in_stock: editForm.in_stock,
+        image_url: imageUrls.length > 0 ? imageUrls.join(',') : null,
         updated_at: new Date().toISOString(),
       };
 
@@ -392,21 +726,139 @@ const AdminDashboard = () => {
       );
       setShowEditModal(false);
       setEditingProduct(null);
+      setEditSelectedImages([]);
+      setEditImagePreviews([]);
+      setEditSelectedImage(null);
       setShowSuccessModal(true);
     } catch (err) {
       console.error("Error updating product:", err);
       setError("Failed to update product: " + err.message);
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleEditImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+const handleEditImageChange = async (e) => {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+
+  const fileArray = Array.from(files);
+  const validFiles = fileArray.filter(file => file.type.startsWith("image/"));
+
+  if (validFiles.length === 0) {
+    setError("Please select image files");
+    return;
+  }
+
+  try {
+    setError("");
+
+    const newPreviews = [];
+    const newImages = [];
+
+    for (const file of validFiles) {
+      // Preview + dimensions
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setEditImagePreview(e.target.result);
+      const previewPromise = new Promise((resolve) => {
+        reader.onload = (ev) => {
+          newPreviews.push(ev.target.result);
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+      await previewPromise;
+
+      // Compressed image used for upload
+      const compressedImage = await compressImage(file, 150, 800);
+      newImages.push(compressedImage);
+    }
+
+    setEditImagePreviews([...editImagePreviews, ...newPreviews]);
+    setEditSelectedImages([...editSelectedImages, ...newImages]);
+
+    // Set the first new image as the preview for framing controls
+    if (newPreviews.length > 0) {
+      setEditImagePreview(newPreviews[0]);
+      const img = new Image();
+      img.src = newPreviews[0];
+      img.onload = () => {
+        const dims = { width: img.width, height: img.height };
+        setEditImageDimensions(dims);
+
+        // center it
+        const { w, h } = getCoverSize(dims.width, dims.height, FRAME_WIDTH, FRAME_HEIGHT, 1);
+        setEditImageFrame({ x: (FRAME_WIDTH - w) / 2, y: (FRAME_HEIGHT - h) / 2, scale: 1 });
       };
-      reader.readAsDataURL(file);
+    }
+  } catch (err) {
+    console.error("Error processing images:", err);
+    setError("Failed to process images");
+  }
+};
+
+
+  const handleEditRemoveImage = () => {
+  setEditSelectedImages([]);
+  setEditImagePreviews([]);
+  setEditSelectedImage(null);
+  setEditImagePreview(null);
+
+  // ✅ reset frame + scale + drag state
+  setEditImageFrame({ x: 0, y: 0, scale: 1 });
+  setEditImageDimensions({ width: 0, height: 0 });
+  setIsDraggingEditImage(false);
+  setEditDragStart({ x: 0, y: 0 });
+
+  if (editFileInputRef.current) {
+    editFileInputRef.current.value = "";
+  }
+};
+
+  const handleEditRemoveSingleImage = (index) => {
+    setEditImagePreviews(editImagePreviews.filter((_, i) => i !== index));
+    setEditSelectedImages(editSelectedImages.filter((_, i) => i !== index));
+    
+    // Update the preview if there are still images
+    if (editImagePreviews.length > 1) {
+      const newIndex = index >= editImagePreviews.length - 1 ? 0 : index;
+      setEditImagePreview(editImagePreviews[newIndex]);
+      const img = new Image();
+      img.src = editImagePreviews[newIndex];
+      img.onload = () => {
+        const dims = { width: img.width, height: img.height };
+        setEditImageDimensions(dims);
+
+        // center it
+        const { w, h } = getCoverSize(dims.width, dims.height, FRAME_WIDTH, FRAME_HEIGHT, 1);
+        setEditImageFrame({ x: (FRAME_WIDTH - w) / 2, y: (FRAME_HEIGHT - h) / 2, scale: 1 });
+      };
+    } else {
+      setEditImagePreview(null);
+      setEditImageDimensions({ width: 0, height: 0 });
+    }
+  };
+
+
+  const handleEditDropZoneClick = () => {
+    editFileInputRef.current?.click();
+  };
+
+  const handleEditDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleEditImageChange({ target: { files: e.dataTransfer.files } });
+    }
+  };
+
+  const handleEditDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setEditDragActive(true);
+    } else if (e.type === "dragleave") {
+      setEditDragActive(false);
     }
   };
 
@@ -425,8 +877,8 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="text-center">
-              <span className="fas fa-exclamation-triangle text-red-500 text-5xl mb-4 block"></span>
-              <h3 className="text-xl font-bold mb-2">Delete Product</h3>
+              <span className="fas fa-exclamation-triangle text-black text-5xl mb-4 block"></span>
+              <h3 className="text-xl font-bold mb-2 text-black">Delete Product</h3>
               <p className="text-gray-600 mb-6">
                 Are you sure you want to delete "{productToDelete?.name}"? This
                 action cannot be undone.
@@ -437,13 +889,13 @@ const AdminDashboard = () => {
                     setShowDeleteModal(false);
                     setProductToDelete(null);
                   }}
-                  className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+                  className="bg-gray-200 hover:bg-gray-300 text-black px-4 py-2 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmDelete}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg transition-colors"
                 >
                   Delete
                 </button>
@@ -458,8 +910,8 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="text-center">
-              <span className="fas fa-exclamation-triangle text-red-500 text-5xl mb-4 block"></span>
-              <h3 className="text-xl font-bold mb-2">Delete {selectedProducts.length} Products</h3>
+              <span className="fas fa-exclamation-triangle text-black text-5xl mb-4 block"></span>
+              <h3 className="text-xl font-bold mb-2 text-black">Delete {selectedProducts.length} Products</h3>
               <p className="text-gray-600 mb-6">
                 Are you sure you want to delete {selectedProducts.length} products? This
                 action cannot be undone.
@@ -467,13 +919,13 @@ const AdminDashboard = () => {
               <div className="flex gap-4 justify-center">
                 <button
                   onClick={() => setShowBulkDeleteModal(false)}
-                  className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+                  className="bg-gray-200 hover:bg-gray-300 text-black px-4 py-2 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleBulkDelete}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg transition-colors"
                 >
                   Delete All
                 </button>
@@ -488,13 +940,13 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800">Edit Product</h3>
+              <h3 className="text-xl font-bold text-black">Edit Product</h3>
               <button
                 onClick={() => {
                   setShowEditModal(false);
                   setEditingProduct(null);
                 }}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-black"
               >
                 <span className="fas fa-times text-xl"></span>
               </button>
@@ -502,25 +954,25 @@ const AdminDashboard = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
                   Product Name *
                 </label>
                 <input
                   type="text"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
                   placeholder="Enter product name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
                   Category *
                 </label>
                 <select
                   value={editForm.category}
                   onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
                 >
                   <option value="">Select category</option>
                   <option value="Traditional">Traditional</option>
@@ -532,7 +984,7 @@ const AdminDashboard = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
                   Price
                 </label>
                 <input
@@ -540,41 +992,132 @@ const AdminDashboard = () => {
                   step="0.01"
                   value={editForm.price}
                   onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
                   placeholder="0.00"
                 />
               </div>
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Description *
               </label>
               <textarea
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
                 rows="3"
                 placeholder="Enter product description"
               />
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Product Image
               </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                {editImagePreview ? (
-                  <div className="relative inline-block">
-                    <img
-                      src={editImagePreview}
-                      alt="Preview"
-                      className="max-w-[200px] max-h-[200px] object-contain rounded-lg"
+              <div className="border-2 border-gray-200 rounded-lg p-4">
+                {editImagePreviews.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Image Grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {editImagePreviews.map((preview, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={preview}
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-24 object-cover rounded-lg border border-gray-300"
+                          />
+                          <button
+                            onClick={() => handleEditRemoveSingleImage(index)}
+                            className="absolute top-1 right-1 w-6 h-6 bg-black text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <span className="fas fa-times text-xs"></span>
+                          </button>
+                          <span className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded">
+                            {index + 1}
+                          </span>
+                        </div>
+                      ))}
+                      {/* Add More Images Button */}
+                      <div
+                        onClick={handleEditDropZoneClick}
+                        className="w-full h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-black transition-colors"
+                      >
+                        <div className="text-center">
+                          <span className="fas fa-plus text-gray-400 text-xl block mb-1"></span>
+                          <span className="text-xs text-gray-500">Add More</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Instructions */}
+                    <p className="text-xs text-gray-500 text-center">
+                      {editImagePreviews.length} image{editImagePreviews.length !== 1 ? 's' : ''} uploaded • Click "Add More" to upload additional images
+                    </p>
+
+                    {/* Image Actions */}
+                    <div className="flex justify-center gap-3 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={handleEditRemoveImage}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-200 hover:bg-gray-300 text-black rounded-lg transition-colors"
+                      >
+                        <span className="fas fa-trash mr-1.5"></span>
+                        Remove All
+                      </button>
+                      <div
+                        className={`border-2 border-dashed rounded-lg px-4 py-1.5 cursor-pointer transition-colors ${
+                          editDragActive
+                            ? "border-black bg-gray-100"
+                            : "border-gray-300 hover:border-black"
+                        }`}
+                        onDragEnter={handleEditDrag}
+                        onDragLeave={handleEditDrag}
+                        onDragOver={handleEditDrag}
+                        onDrop={handleEditDrop}
+                        onClick={handleEditDropZoneClick}
+                      >
+                        <span className="fas fa-upload text-sm mr-1.5 text-gray-500"></span>
+                        <span className="text-sm text-gray-600">Add More</span>
+                      </div>
+                    </div>
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleEditImageChange}
+                      className="hidden"
                     />
-                    <p className="text-sm text-gray-500 mt-2">Image cannot be changed in edit mode</p>
                   </div>
                 ) : (
-                  <p className="text-gray-500">No image</p>
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                      editDragActive
+                        ? "border-black bg-gray-100"
+                        : "border-gray-300 hover:border-black"
+                    }`}
+                    onDragEnter={handleEditDrag}
+                    onDragLeave={handleEditDrag}
+                    onDragOver={handleEditDrag}
+                    onDrop={handleEditDrop}
+                    onClick={handleEditDropZoneClick}
+                  >
+                    <span className="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2 block"></span>
+                    <p className="text-gray-600 mb-2">
+                      Click or drag and drop to upload images
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      You can upload multiple images at once
+                    </p>
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleEditImageChange}
+                      className="hidden"
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -585,7 +1128,7 @@ const AdminDashboard = () => {
                   type="checkbox"
                   checked={editForm.in_stock}
                   onChange={(e) => setEditForm({ ...editForm, in_stock: e.target.checked })}
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
                 />
                 <span className="ml-2 text-sm text-gray-700">In Stock</span>
               </label>
@@ -596,14 +1139,20 @@ const AdminDashboard = () => {
                 onClick={() => {
                   setShowEditModal(false);
                   setEditingProduct(null);
+                  setEditImagePreviews([]);
+                  setEditSelectedImages([]);
+                  setEditSelectedImage(null);
+                  setEditImagePreview(null);
+                  setEditImageFrame({ x: 0, y: 0, scale: 1 });
+                  setEditImageDimensions({ width: 0, height: 0 });
                 }}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+                className="bg-gray-200 hover:bg-gray-300 text-black px-4 py-2 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpdateProduct}
-                className="bg-primary hover:bg-blue-800 text-white px-6 py-2 rounded-lg transition-colors"
+                className="bg-black hover:bg-gray-800 text-white px-6 py-2 rounded-lg transition-colors"
               >
                 <span className="fas fa-check mr-2"></span>
                 Save Changes
@@ -613,7 +1162,214 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      <header className="bg-dark text-white py-6">
+      {/* Add New Product Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-black">Add New Product</h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-gray-500 hover:text-black"
+              >
+                <span className="fas fa-times text-xl"></span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
+                  Product Name *
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.name}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, name: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  placeholder="Enter product name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
+                  Category *
+                </label>
+                <select
+                  value={newProduct.category}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, category: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                >
+                  <option value="">Select category</option>
+                  <option value="Traditional">Traditional</option>
+                  <option value="Contemporary">Contemporary</option>
+                  <option value="Hanging">Hanging</option>
+                  <option value="Specialty">Specialty</option>
+                  <option value="Modern">Modern</option>
+                  <option value="Miniature">Miniature</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
+                  Price
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newProduct.price}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, price: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-black mb-2">
+                Description *
+              </label>
+              <textarea
+                value={newProduct.description}
+                onChange={(e) =>
+                  setNewProduct({
+                    ...newProduct,
+                    description: e.target.value,
+                  })
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                rows="3"
+                placeholder="Enter product description"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-black mb-2">
+                Product Image
+              </label>
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer ${
+                  dragActive
+                    ? "border-black bg-gray-100"
+                    : "border-gray-300 hover:border-black"
+                }`}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                onClick={handleDropZoneClick}
+              >
+                {imagePreviews.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Image Grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {imagePreviews.map((preview, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={preview}
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-24 object-cover rounded-lg border border-gray-300"
+                          />
+                          <button
+                            onClick={() => handleRemoveImage(index)}
+                            className="absolute top-1 right-1 w-6 h-6 bg-black text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <span className="fas fa-times text-xs"></span>
+                          </button>
+                          <span className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded">
+                            {index + 1}
+                          </span>
+                        </div>
+                      ))}
+                      {/* Add More Images Button */}
+                      <div
+                        onClick={handleDropZoneClick}
+                        className="w-full h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-black transition-colors"
+                      >
+                        <div className="text-center">
+                          <span className="fas fa-plus text-gray-400 text-xl block mb-1"></span>
+                          <span className="text-xs text-gray-500">Add More</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Instructions */}
+                    <p className="text-xs text-gray-500 text-center">
+                      {imagePreviews.length} image{imagePreviews.length !== 1 ? 's' : ''} uploaded • Click "Add More" to upload additional images
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <span className="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2 block"></span>
+                    <p className="text-gray-600 mb-2">
+                      Click or drag and drop to upload images
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      You can upload multiple images at once
+                    </p>
+                  </>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                  className="hidden"
+                />
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={newProduct.in_stock}
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      in_stock: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black"
+                />
+                <span className="ml-2 text-sm text-gray-700">In Stock</span>
+              </label>
+            </div>
+
+            <div className="flex gap-4 justify-end">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-black px-4 py-2 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddProduct}
+                disabled={uploading}
+                className="bg-black hover:bg-gray-800 text-white px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {uploading ? (
+                  <>
+                    <span className="fas fa-spinner fa-spin mr-2"></span>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <span className="fas fa-check mr-2"></span>
+                    Save Product
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <header className="bg-black text-white py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
         </div>
@@ -621,202 +1377,61 @@ const AdminDashboard = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
+          <div className="bg-gray-100 border border-gray-300 text-black px-4 py-3 rounded-lg mb-6">
             <span className="fas fa-exclamation-circle mr-2"></span>
             {error}
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-800">Manage Products</h2>
-            <button
-              onClick={() => setIsAddingProduct(!isAddingProduct)}
-              className="bg-primary hover:bg-blue-800 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              {isAddingProduct ? (
-                <>
-                  <span className="fas fa-times mr-2"></span>
-                  Cancel
-                </>
-              ) : (
-                <>
-                  <span className="fas fa-plus mr-2"></span>
-                  Add New Product
-                </>
-              )}
-            </button>
-          </div>
-
-          {isAddingProduct && (
-            <div className="border-t pt-6 mt-6">
-              <h3 className="text-lg font-semibold mb-4">Add New Product</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={newProduct.name}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, name: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    placeholder="Enter product name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category *
-                  </label>
-                  <select
-                    value={newProduct.category}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, category: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  >
-                    <option value="">Select category</option>
-                    <option value="Traditional">Traditional</option>
-                    <option value="Contemporary">Contemporary</option>
-                    <option value="Hanging">Hanging</option>
-                    <option value="Specialty">Specialty</option>
-                    <option value="Modern">Modern</option>
-                    <option value="Miniature">Miniature</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newProduct.price}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, price: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description *
-                </label>
-                <textarea
-                  value={newProduct.description}
-                  onChange={(e) =>
-                    setNewProduct({
-                      ...newProduct,
-                      description: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  rows="3"
-                  placeholder="Enter product description"
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <h2 className="text-xl font-bold text-black">Manage Products</h2>
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              {/* Search Input */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1); // Reset to first page when searching
+                  }}
+                  className="w-full sm:w-64 px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
                 />
+                <span className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></span>
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setCurrentPage(1);
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <span className="fas fa-times"></span>
+                  </button>
+                )}
               </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Image
-                </label>
-                <div
-                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer ${
-                    dragActive
-                      ? "border-primary bg-primary/5"
-                      : "border-gray-300 hover:border-primary"
-                  }`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={handleDropZoneClick}
-                >
-                  {imagePreview ? (
-                    <div className="relative inline-block">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="max-w-[200px] max-h-[200px] object-contain rounded-lg"
-                      />
-                      <button
-                        onClick={handleRemoveImage}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-                      >
-                        <span className="fas fa-times text-xs"></span>
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2 block"></span>
-                      <p className="text-gray-600 mb-2">
-                        Click or drag and drop to upload image
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Images will be automatically compressed
-                      </p>
-                    </>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileSelect(e.target.files[0])}
-                    className="hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={newProduct.in_stock}
-                    onChange={(e) =>
-                      setNewProduct({
-                        ...newProduct,
-                        in_stock: e.target.checked,
-                      })
-                    }
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">In Stock</span>
-                </label>
-              </div>
-
-              <div className="flex gap-4">
-                <button
-                  onClick={handleAddProduct}
-                  disabled={uploading}
-                  className="bg-primary hover:bg-blue-800 text-white px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <>
-                      <span className="fas fa-spinner fa-spin mr-2"></span>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <span className="fas fa-check mr-2"></span>
-                      Save Product
-                    </>
-                  )}
-                </button>
-              </div>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+              >
+                <span className="fas fa-plus mr-2"></span>
+                Add New Product
+              </button>
             </div>
-          )}
+          </div>
 
           {/* Products Table */}
           <div className="flex justify-between items-center mb-4">
+            <div className="text-sm text-gray-600">
+              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredProducts.length)} to {Math.min(currentPage * itemsPerPage, filteredProducts.length)} of {filteredProducts.length} products
+              {searchQuery && ` (filtered from ${products.length} total)`}
+            </div>
             {selectedProducts.length > 0 && (
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg transition-colors"
               >
                 <span className="fas fa-trash mr-2"></span>
                 Delete Selected ({selectedProducts.length})
@@ -829,118 +1444,252 @@ const AdminDashboard = () => {
                 <span className="fas fa-spinner fa-spin text-primary text-3xl"></span>
                 <p className="text-gray-500 mt-4">Loading products...</p>
               </div>
-            ) : products.length === 0 ? (
+            ) : filteredProducts.length === 0 ? (
               <div className="text-center py-8">
                 <span className="fas fa-box text-gray-400 text-5xl mb-4 block"></span>
-                <p className="text-gray-500">No products found</p>
+                <p className="text-gray-500">
+                  {searchQuery ? "No products match your search" : "No products found"}
+                </p>
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setCurrentPage(1);
+                    }}
+                    className="mt-4 text-black hover:underline"
+                  >
+                    Clear search
+                  </button>
+                )}
               </div>
             ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-100 text-left">
-                    <th className="px-4 py-3 text-sm font-semibold text-gray-700 w-12">
-                      <input
-                        type="checkbox"
-                        checked={products.length > 0 && selectedProducts.length === products.length}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      Image
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      Price
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((product) => (
-                    <tr
-                      key={product.id}
-                      className={`border-t border-gray-200 hover:bg-gray-50 ${
-                        selectedProducts.includes(product.id) ? "bg-blue-50" : ""
-                      }`}
-                    >
-                      <td className="px-4 py-3">
+              <>
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-100 text-left">
+                      <th className="px-4 py-3 text-sm font-semibold text-black w-12">
                         <input
                           type="checkbox"
-                          checked={selectedProducts.includes(product.id)}
-                          onChange={() => handleSelectProduct(product.id)}
-                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+                          checked={filteredProducts.length > 0 && selectedProducts.length === filteredProducts.length}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
                         />
-                      </td>
-                      <td className="px-4 py-3">
-                        {product.image_url ? (
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="w-12 h-12 object-cover rounded-lg"
-                          />
-                        ) : (
-                          <span className="fas fa-image text-gray-400 text-2xl"></span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium">
-                        {product.name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {product.category}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium">
-                        {product.price ? `₱${product.price.toFixed(2)}` : "-"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            product.in_stock
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-black">
+                        Image
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-black">
+                        Name
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-black">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-black">
+                        Price
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-black">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-black">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProducts
+                      .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                      .map((product) => (
+                        <tr
+                          key={product.id}
+                          className={`border-t border-gray-200 hover:bg-gray-50 ${
+                            selectedProducts.includes(product.id) ? "bg-gray-100" : ""
                           }`}
                         >
-                          {product.in_stock ? "In Stock" : "Out of Stock"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEditClick(product)}
-                            className="text-primary hover:text-blue-800 transition-colors"
-                            title="Edit"
-                          >
-                            <span className="fas fa-edit"></span>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(product)}
-                            className="text-red-500 hover:text-red-700 transition-colors"
-                            title="Delete"
-                          >
-                            <span className="fas fa-trash"></span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedProducts.includes(product.id)}
+                              onChange={() => handleSelectProduct(product.id)}
+                              className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            {product.image_url ? (
+                              <img
+                                src={product.image_url.split(',')[0]}
+                                alt={product.name}
+                                className="w-12 h-12 object-cover rounded-lg"
+                              />
+                            ) : (
+                              <span className="fas fa-image text-gray-400 text-2xl"></span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-black">
+                            {product.name}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {product.category}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-black">
+                            {product.price ? `₱${product.price.toFixed(2)}` : "-"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2 py-1 text-xs rounded-full ${
+                                product.in_stock
+                                  ? "bg-black text-white"
+                                  : "bg-gray-300 text-black"
+                              }`}
+                            >
+                              {product.in_stock ? "In Stock" : "Out of Stock"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleEditClick(product)}
+                                className="text-black hover:text-gray-600 transition-colors"
+                                title="Edit"
+                              >
+                                <span className="fas fa-edit"></span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(product)}
+                                className="text-black hover:text-gray-600 transition-colors"
+                                title="Delete"
+                              >
+                                <span className="fas fa-trash"></span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+
+                {/* Pagination Controls */}
+                {filteredProducts.length > itemsPerPage && (
+                  <div className="flex justify-center items-center mt-6 gap-2">
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-black"
+                    >
+                      <span className="fas fa-chevron-left"></span>
+                    </button>
+                    {Array.from({ length: Math.ceil(filteredProducts.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-10 h-10 rounded-lg transition-colors ${
+                          currentPage === page
+                            ? "bg-black text-white"
+                            : "bg-gray-200 hover:bg-gray-300 text-black"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.min(prev + 1, Math.ceil(filteredProducts.length / itemsPerPage)))}
+                      disabled={currentPage === Math.ceil(filteredProducts.length / itemsPerPage)}
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-black"
+                    >
+                      <span className="fas fa-chevron-right"></span>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
 
         {/* Messages Section */}
         <MessagesSection />
+
+        {/* Draggable Component Demo Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Draggable Widget Demo</h2>
+          <p className="text-gray-600 mb-4">
+            Drag the colored widgets within the frame below. They will stay fully visible and never extend beyond the boundary.
+          </p>
+          
+          <DraggableFrame
+            width="100%"
+            height="400px"
+            border="2px solid #3b82f6"
+            backgroundColor="#f0f9ff"
+            showBoundary={true}
+            className="relative"
+          >
+            {(frameRef) => (
+              <>
+                {/* Draggable Widget 1 - Blue */}
+                <Draggable
+                  frameRef={frameRef}
+                  initialPosition={{ x: 20, y: 20 }}
+                  boundary="contain"
+                  cursor="grab"
+                  activeCursor="grabbing"
+                  highlightOnDrag={true}
+                  onDragStart={(data) => console.log('Widget 1 drag started:', data)}
+                  onDrag={(data) => console.log('Widget 1 position:', data.position)}
+                  onDragEnd={(data) => console.log('Widget 1 drag ended:', data)}
+                >
+                  <div className="bg-blue-500 text-white p-4 rounded-lg shadow-lg w-40 text-center">
+                    <span className="fas fa-arrows-alt mr-2"></span>
+                    Drag Me!
+                    <div className="text-xs opacity-75 mt-1">Widget 1</div>
+                  </div>
+                </Draggable>
+
+                {/* Draggable Widget 2 - Green */}
+                <Draggable
+                  frameRef={frameRef}
+                  initialPosition={{ x: 200, y: 100 }}
+                  boundary="contain"
+                  cursor="grab"
+                  activeCursor="grabbing"
+                  highlightOnDrag={true}
+                  onDragStart={(data) => console.log('Widget 2 drag started:', data)}
+                  onDrag={(data) => console.log('Widget 2 position:', data.position)}
+                  onDragEnd={(data) => console.log('Widget 2 drag ended:', data)}
+                >
+                  <div className="bg-green-500 text-white p-4 rounded-lg shadow-lg w-40 text-center">
+                    <span className="fas fa-hand-paper mr-2"></span>
+                    Touch Me!
+                    <div className="text-xs opacity-75 mt-1">Widget 2</div>
+                  </div>
+                </Draggable>
+
+                {/* Draggable Widget 3 - Purple */}
+                <Draggable
+                  frameRef={frameRef}
+                  initialPosition={{ x: 380, y: 180 }}
+                  boundary="contain"
+                  cursor="grab"
+                  activeCursor="grabbing"
+                  highlightOnDrag={true}
+                  onDragStart={(data) => console.log('Widget 3 drag started:', data)}
+                  onDrag={(data) => console.log('Widget 3 position:', data.position)}
+                  onDragEnd={(data) => console.log('Widget 3 drag ended:', data)}
+                >
+                  <div className="bg-purple-500 text-white p-4 rounded-lg shadow-lg w-40 text-center">
+                    <span className="fas fa-mobile-alt mr-2"></span>
+                    Mobile Ready!
+                    <div className="text-xs opacity-75 mt-1">Widget 3</div>
+                  </div>
+                </Draggable>
+
+                {/* Static Reference Point */}
+                <div className="absolute bottom-4 right-4 bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm">
+                  <span className="fas fa-info-circle mr-1"></span>
+                  Widgets are constrained within the blue frame
+                </div>
+              </>
+            )}
+          </DraggableFrame>
+        </div>
       </div>
 
       {/* Success Modal */}

@@ -33,21 +33,21 @@ const Navbar = () => {
     return (
       <nav
         className={`fixed w-full z-50 transition-all duration-300 ${
-          isScrolled ? "navbar-glass shadow-md" : "bg-white"
+          isScrolled ? "navbar-glass shadow-sm" : "bg-white"
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <Link to="/" className="flex items-center group">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-light rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
-                <span className="text-white font-bold text-xl">JC</span>
+              <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+                <span className="text-white font-bold text-lg">JC</span>
               </div>
-              <span className="ml-3 text-xl font-bold text-dark font-display">
-                Jhansel Cement Pots
+              <span className="ml-3 text-lg font-semibold text-black font-display">
+                Jhansel
               </span>
             </Link>
             <div className="hidden md:flex items-center space-x-4">
-              <span className="spinner text-primary"></span>
+              <span className="spinner text-green-600"></span>
             </div>
           </div>
         </div>
@@ -58,22 +58,22 @@ const Navbar = () => {
   return (
     <nav
       className={`fixed w-full z-50 transition-all duration-300 ${
-        isScrolled ? "navbar-glass shadow-md py-2" : "bg-white py-4"
+        isScrolled ? "navbar-glass shadow-sm py-3" : "bg-white py-4"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
           {/* Logo */}
           <Link to="/" className="flex items-center group">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary-light rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-              <span className="text-white font-bold text-2xl">JC</span>
+            <div className="w-11 h-11 bg-black rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all duration-300 group-hover:scale-105">
+              <span className="text-white font-bold text-lg">JS</span>
             </div>
             <div className="ml-3 hidden sm:block">
-              <span className="text-lg font-bold text-dark font-display">
-                Jhansel Cement Pots
+              <span className="text-lg font-semibold text-black font-display">
+                Jhansel
               </span>
-              <span className="block text-xs text-gray-500 -mt-1">
-                Manufacturing
+              <span className="block text-xs text-gray-500 -mt-0.5 tracking-wide">
+                CEMENT POTS MANUFACTURING
               </span>
             </div>
           </Link>
@@ -85,10 +85,10 @@ const Navbar = () => {
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
-                  `px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                  `px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                     isActive
-                      ? "bg-primary text-white shadow-md"
-                      : "text-gray-600 hover:text-primary hover:bg-primary/5"
+                      ? "bg-black text-white shadow-md"
+                      : "text-gray-600 hover:text-green-600 hover:bg-gray-100"
                   }`
                 }
               >
@@ -103,14 +103,14 @@ const Navbar = () => {
               <>
                 <Link
                   to="/admin"
-                  className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-xl transition-all duration-300 shadow-md hover:shadow-lg"
+                  className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
                 >
                   <i className="fas fa-th-large mr-2"></i>
                   Dashboard
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-xl transition-all duration-300 shadow-md hover:shadow-lg"
+                  className="flex items-center px-4 py-2 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
                 >
                   <i className="fas fa-sign-out-alt mr-2"></i>
                   Logout
@@ -119,7 +119,7 @@ const Navbar = () => {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center px-6 py-2.5 bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-white text-sm font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="flex items-center px-5 py-2.5 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
               >
                 <i className="fas fa-user mr-2"></i>
                 Login
@@ -131,7 +131,7 @@ const Navbar = () => {
           <div className="md:flex lg:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="inline-flex items-center justify-center p-2.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-300"
+              className="inline-flex items-center justify-center p-2.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none transition-all duration-300"
               aria-label="Toggle menu"
             >
               <div className="relative w-6 h-6">
@@ -160,7 +160,7 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       <div
-        className={`md:hidden bg-white border-t border-gray-100 transition-all duration-300 ${
+        className={`md:hidden bg-white border-t border-gray-200 transition-all duration-300 ${
           isMenuOpen
             ? "max-h-screen opacity-100 visible"
             : "max-h-0 opacity-0 invisible"
@@ -175,8 +175,8 @@ const Navbar = () => {
               className={({ isActive }) =>
                 `flex items-center px-4 py-3 rounded-xl text-base font-medium transition-all duration-300 ${
                   isActive
-                    ? "bg-primary text-white shadow-md"
-                    : "text-gray-600 hover:text-primary hover:bg-primary/5"
+                    ? "bg-black text-white shadow-md"
+                    : "text-gray-600 hover:text-green-600 hover:bg-gray-100"
                 }`
               }
             >
@@ -184,7 +184,7 @@ const Navbar = () => {
               {link.label}
             </NavLink>
           ))}
-          <div className="pt-4 space-y-2 border-t border-gray-100">
+          <div className="pt-4 space-y-2 border-t border-gray-200">
             {isAuthenticated ? (
               <>
                 <Link
@@ -200,7 +200,7 @@ const Navbar = () => {
                     handleLogout();
                     setIsMenuOpen(false);
                   }}
-                  className="w-full flex items-center px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-300"
+                  className="w-full flex items-center px-4 py-3 bg-black hover:bg-gray-800 text-white rounded-xl transition-all duration-300"
                 >
                   <i className="fas fa-sign-out-alt mr-3"></i>
                   Logout
@@ -210,7 +210,7 @@ const Navbar = () => {
               <Link
                 to="/login"
                 onClick={() => setIsMenuOpen(false)}
-                className="flex items-center justify-center px-4 py-3 bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-white rounded-xl transition-all duration-300"
+                className="flex items-center justify-center px-4 py-3 bg-black hover:bg-gray-800 text-white rounded-xl transition-all duration-300"
               >
                 <i className="fas fa-user mr-2"></i>
                 Login

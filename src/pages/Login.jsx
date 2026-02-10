@@ -53,29 +53,23 @@ const Login = () => {
   };
 
   return (
-    <div className="pt-16 min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="pt-16 min-h-screen flex items-center justify-center bg-white">
       {/* Background Pattern */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full filter blur-3xl"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-primary-light/5 rounded-full filter blur-3xl"></div>
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-black/5 rounded-full filter blur-3xl"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-gray-200/50 rounded-full filter blur-3xl"></div>
       </div>
 
       <div className="max-w-md w-full mx-4">
-        {/* Logo */}
-        <div className="text-center mb-8 animate-fadeInDown">
-          <Link to="/" className="inline-flex items-center group">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary-light rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-              <span className="text-white font-bold text-2xl">JC</span>
-            </div>
-          </Link>
-        </div>
-
         {/* Login Card */}
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden animate-fadeInUp animation-delay-200">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-fadeInUp animation-delay-200">
           {/* Header */}
-          <div className="bg-gradient-to-r from-primary to-primary-light px-8 py-6 text-white text-center">
-            <h1 className="text-2xl font-bold mb-1">Admin Login</h1>
-            <p className="text-blue-100 text-sm">
+          <div className="bg-black px-8 py-8 text-white text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-white rounded-full flex items-center justify-center">
+              <i className="fas fa-user-shield text-black text-2xl"></i>
+            </div>
+            <h1 className="text-2xl font-bold mb-2 text-white">Admin Login</h1>
+            <p className="text-gray-400 text-sm">
               Access your dashboard to manage your store
             </p>
           </div>
@@ -83,10 +77,10 @@ const Login = () => {
           {/* Form */}
           <div className="p-8">
             {error && (
-              <div className="bg-red-50 border border-red-100 rounded-2xl p-4 mb-6 animate-scaleIn">
+              <div className="bg-gray-100 border border-gray-300 rounded-xl p-4 mb-6 animate-scaleIn">
                 <div className="flex items-center">
-                  <i className="fas fa-exclamation-circle text-red-500 mr-3"></i>
-                  <p className="text-red-700 text-sm">{error}</p>
+                  <i className="fas fa-exclamation-circle text-black mr-3"></i>
+                  <p className="text-black text-sm">{error}</p>
                 </div>
               </div>
             )}
@@ -94,7 +88,7 @@ const Login = () => {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email Field */}
               <div>
-                <label htmlFor="email" className="form-label">
+                <label htmlFor="email" className="block text-sm font-medium text-black mb-2">
                   Email Address
                 </label>
                 <div className="relative">
@@ -105,11 +99,11 @@ const Login = () => {
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="form-input-with-icon pr-4"
+                    className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-300 bg-white text-black placeholder-gray-400"
                     placeholder="admin@jhanselcementpots.com"
                     autoComplete="email"
                   />
-                  <div className="form-icon-container">
+                  <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
                     <i className="fas fa-envelope text-gray-400"></i>
                   </div>
                 </div>
@@ -117,7 +111,7 @@ const Login = () => {
 
               {/* Password Field */}
               <div>
-                <label htmlFor="password" className="form-label">
+                <label htmlFor="password" className="block text-sm font-medium text-black mb-2">
                   Password
                 </label>
                 <div className="relative">
@@ -128,17 +122,17 @@ const Login = () => {
                     value={formData.password}
                     onChange={handleChange}
                     required
-                    className="form-input-with-icon pr-12"
+                    className="w-full px-4 py-3 pl-12 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-300 bg-white text-black placeholder-gray-400"
                     placeholder="Enter your password"
                     autoComplete="current-password"
                   />
-                  <div className="form-icon-container">
+                  <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
                     <i className="fas fa-lock text-gray-400"></i>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-black transition-colors p-1"
                   >
                     <i
                       className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}
@@ -152,13 +146,13 @@ const Login = () => {
                 <label className="flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+                    className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
                   />
                   <span className="ml-2 text-sm text-gray-600">Remember me</span>
                 </label>
                 <a
                   href="#"
-                  className="text-sm text-primary hover:underline font-medium"
+                  className="text-sm text-black hover:underline font-medium"
                 >
                   Forgot password?
                 </a>
@@ -168,7 +162,7 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full btn-primary py-3.5 text-lg flex items-center justify-center gap-2 disabled:opacity-70 transition-all duration-300"
+                className="w-full bg-black hover:bg-gray-800 text-white py-3.5 text-lg rounded-xl flex items-center justify-center gap-2 disabled:opacity-70 transition-all duration-300 font-medium"
               >
                 {isLoading ? (
                   <>
@@ -178,14 +172,14 @@ const Login = () => {
                 ) : (
                   <>
                     <span>Sign In</span>
-                    <i className="fas fa-sign-in-alt"></i>
+                    <i className="fas fa-arrow-right"></i>
                   </>
                 )}
               </button>
             </form>
 
             {/* Divider */}
-            <div className="divider"></div>
+            <div className="border-t border-gray-200 my-6"></div>
 
             {/* Back to Home */}
             <div className="text-center">
@@ -194,7 +188,7 @@ const Login = () => {
               </p>
               <Link
                 to="/"
-                className="inline-flex items-center text-primary font-semibold hover:text-primary-dark transition-colors"
+                className="inline-flex items-center text-black font-semibold hover:text-gray-600 transition-colors"
               >
                 <i className="fas fa-arrow-left mr-2"></i>
                 Back to Homepage
