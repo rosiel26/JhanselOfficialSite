@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const { isAuthenticated, loading, logout } = useAuth();
+  const { isAuthenticated, isAdmin, loading, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -101,13 +101,15 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-3">
             {isAuthenticated ? (
               <>
-                <Link
-                  to="/admin"
-                  className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
-                >
-                  <i className="fas fa-th-large mr-2"></i>
-                  Dashboard
-                </Link>
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
+                  >
+                    <i className="fas fa-th-large mr-2"></i>
+                    Dashboard
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="flex items-center px-4 py-2 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
@@ -187,14 +189,16 @@ const Navbar = () => {
           <div className="pt-4 space-y-2 border-t border-gray-200">
             {isAuthenticated ? (
               <>
-                <Link
-                  to="/admin"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="flex items-center px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all duration-300"
-                >
-                  <i className="fas fa-th-large mr-3"></i>
-                  Dashboard
-                </Link>
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all duration-300"
+                  >
+                    <i className="fas fa-th-large mr-3"></i>
+                    Dashboard
+                  </Link>
+                )}
                 <button
                   onClick={() => {
                     handleLogout();

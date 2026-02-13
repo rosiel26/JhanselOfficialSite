@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { supabase, getServiceRoleClient } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
+import { validateProductForm } from "../lib/security";
 import Draggable, { DraggableFrame } from "../components/Draggable";
 
 const AdminDashboard = () => {
-  const { isAuthenticated, loading: authLoading, logout } = useAuth();
+  const { isAuthenticated, isAdmin, loading: authLoading, logout } = useAuth();
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,10 +79,15 @@ useEffect(() => {
       navigate("/login");
       return;
     }
-    if (isAuthenticated) {
+    // Check if user has admin role
+    if (isAuthenticated && !isAdmin) {
+      navigate("/");
+      return;
+    }
+    if (isAuthenticated && isAdmin) {
       fetchProducts();
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, isAdmin, authLoading, navigate]);
 
   const fetchProducts = async () => {
     try {
@@ -89,7 +95,7 @@ useEffect(() => {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("name", { ascending: true });
 
       if (error) throw error;
       setProducts(data || []);
@@ -234,7 +240,11 @@ useEffect(() => {
 
     if (error) throw error;
 
-    const publicUrl = `https://zzznvekcjvixcggkfqwe.supabase.co/storage/v1/object/public/product/${fileName}`;
+    // Use Supabase's getPublicUrl method instead of hardcoded URL
+    const { data: { publicUrl } } = supabase.storage
+      .from("product")
+      .getPublicUrl(fileName);
+
     return publicUrl;
   };
 
@@ -243,15 +253,19 @@ useEffect(() => {
   };
 
   const handleAddProduct = async () => {
-    if (!newProduct.name || !newProduct.category || !newProduct.description) {
-      setError("Please fill in all required fields");
+    // Validate and sanitize form data
+    const validation = validateProductForm(newProduct);
+
+    if (!validation.valid) {
+      // Show the first error message
+      const firstError = Object.values(validation.errors)[0];
+      setError(firstError);
       return;
     }
 
     try {
       setError("");
       setUploading(true);
-      const supabaseAdmin = getServiceRoleClient();
 
       let imageUrls = [];
       if (selectedImages.length > 0) {
@@ -263,17 +277,17 @@ useEffect(() => {
       }
 
       const productData = {
-        name: newProduct.name,
-        category: newProduct.category,
-        description: newProduct.description,
-        price: newProduct.price ? parseFloat(newProduct.price) : null,
-        in_stock: newProduct.in_stock,
+        name: validation.sanitized.name,
+        category: validation.sanitized.category,
+        description: validation.sanitized.description,
+        price: validation.sanitized.price,
+        in_stock: validation.sanitized.in_stock,
         image_url: imageUrls.length > 0 ? imageUrls.join(',') : null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from("products")
         .insert([productData])
         .select();
@@ -295,7 +309,7 @@ useEffect(() => {
       setShowSuccessModal(true);
     } catch (err) {
       console.error("Error adding product:", err);
-      setError("Failed to add product: " + err.message);
+      setError("Failed to add product. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -311,7 +325,6 @@ useEffect(() => {
 
     try {
       setError("");
-      const supabaseAdmin = getServiceRoleClient();
 
       if (productToDelete.image_url) {
         try {
@@ -327,7 +340,7 @@ useEffect(() => {
         }
       }
 
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from("products")
         .delete()
         .eq("id", productToDelete.id);
@@ -338,7 +351,7 @@ useEffect(() => {
       setProductToDelete(null);
     } catch (err) {
       console.error("Error deleting product:", err);
-      setError("Failed to delete product: " + err.message);
+      setError("Failed to delete product. Please try again.");
     }
   };
 
@@ -560,7 +573,6 @@ useEffect(() => {
 
     try {
       setError("");
-      const supabaseAdmin = getServiceRoleClient();
 
       // Delete images and records for selected products
       const productsToDelete = products.filter((p) => selectedProducts.includes(p.id));
@@ -581,7 +593,7 @@ useEffect(() => {
         }
       }
 
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from("products")
         .delete()
         .in("id", selectedProducts);
@@ -662,15 +674,19 @@ const getCoverSize = (imgW, imgH, frameW, frameH, scale = 1) => {
 
 
   const handleUpdateProduct = async () => {
-    if (!editForm.name || !editForm.category || !editForm.description) {
-      setError("Please fill in all required fields");
+    // Validate and sanitize form data
+    const validation = validateProductForm(editForm);
+
+    if (!validation.valid) {
+      // Show the first error message
+      const firstError = Object.values(validation.errors)[0];
+      setError(firstError);
       return;
     }
 
     try {
       setError("");
       setUploading(true);
-      const supabaseAdmin = getServiceRoleClient();
 
       let imageUrls = [...editImagePreviews];
 
@@ -682,7 +698,7 @@ const getCoverSize = (imgW, imgH, frameW, frameH, scale = 1) => {
             const oldImages = editingProduct.image_url.includes(',')
               ? editingProduct.image_url.split(',').map(url => url.trim())
               : [editingProduct.image_url];
-            
+             
             for (const oldImageUrl of oldImages) {
               const urlParts = oldImageUrl.split("/storage/v1/object/public/product/");
               if (urlParts.length === 2) {
@@ -703,16 +719,16 @@ const getCoverSize = (imgW, imgH, frameW, frameH, scale = 1) => {
       }
 
       const productData = {
-        name: editForm.name,
-        category: editForm.category,
-        description: editForm.description,
-        price: editForm.price ? parseFloat(editForm.price) : null,
-        in_stock: editForm.in_stock,
+        name: validation.sanitized.name,
+        category: validation.sanitized.category,
+        description: validation.sanitized.description,
+        price: validation.sanitized.price,
+        in_stock: validation.sanitized.in_stock,
         image_url: imageUrls.length > 0 ? imageUrls.join(',') : null,
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from("products")
         .update(productData)
         .eq("id", editingProduct.id);
@@ -1063,6 +1079,23 @@ const handleEditImageChange = async (e) => {
                       >
                         <span className="fas fa-trash mr-1.5"></span>
                         Remove All
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Replace: clear existing and add new
+                          setEditImagePreviews([]);
+                          setEditSelectedImages([]);
+                          setEditImagePreview(null);
+                          setEditSelectedImage(null);
+                          setEditImageFrame({ x: 0, y: 0, scale: 1 });
+                          setEditImageDimensions({ width: 0, height: 0 });
+                          // Trigger file input click
+                          editFileInputRef.current?.click();
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-black hover:bg-gray-800 text-white rounded-lg transition-colors"
+                      >
+                        <span className="fas fa-exchange-alt mr-1.5"></span>
+                        Replace Image
                       </button>
                       <div
                         className={`border-2 border-dashed rounded-lg px-4 py-1.5 cursor-pointer transition-colors ${

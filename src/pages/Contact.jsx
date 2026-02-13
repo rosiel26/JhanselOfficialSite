@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { validateContactForm } from "../lib/security";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -11,6 +12,17 @@ const Contact = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
+  const [error, setError] = useState("");
+  
+  // Rate limiting state
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lastAttemptTime, setLastAttemptTime] = useState(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  
+  // Rate limiting constants
+  const MAX_ATTEMPTS = 5; // Maximum submissions allowed
+  const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
+  const LOCKOUT_TIME = 5 * 60 * 1000; // 5 minutes lockout after max attempts
 
   const contactInfo = [
     {
@@ -40,13 +52,44 @@ const Contact = () => {
     setIsSubmitting(true);
     setSubmitStatus(null);
 
+    // Check for rate limiting
+    const now = Date.now();
+    if (lastAttemptTime && now - lastAttemptTime < RATE_LIMIT_WINDOW) {
+      // Within the rate limit window, check if max attempts reached
+      if (failedAttempts >= MAX_ATTEMPTS) {
+        const timeRemaining = Math.ceil((lastAttemptTime + LOCKOUT_TIME - now) / 1000);
+        setError(`Too many submissions. Please try again in ${timeRemaining} seconds.`);
+        setIsRateLimited(true);
+        setIsSubmitting(false);
+        return;
+      }
+    } else {
+      // Reset rate limit window after lockout time has passed
+      if (lastAttemptTime && now - lastAttemptTime >= LOCKOUT_TIME) {
+        setFailedAttempts(0);
+        setIsRateLimited(false);
+      }
+    }
+
     try {
+      // Validate and sanitize form data
+      const validation = validateContactForm(formData);
+
+      if (!validation.valid) {
+        // Show the first error message
+        const firstError = Object.values(validation.errors)[0];
+        setError(firstError);
+        setIsSubmitting(false);
+        return;
+      }
+
       const { error } = await supabase.from("contact_messages").insert([
         {
-          name: formData.name,
-          email: formData.email,
-          subject: formData.subject,
-          message: formData.message,
+          name: validation.sanitized.name,
+          email: validation.sanitized.email,
+          phone: validation.sanitized.phone || null,
+          subject: validation.sanitized.subject,
+          message: validation.sanitized.message,
           status: "unread",
           created_at: new Date().toISOString(),
         },
@@ -54,6 +97,11 @@ const Contact = () => {
 
       if (error) throw error;
 
+      // Reset rate limiting on successful submission
+      setFailedAttempts(0);
+      setLastAttemptTime(null);
+      setIsRateLimited(false);
+      
       setSubmitStatus("success");
       setFormData({
         name: "",
@@ -62,13 +110,26 @@ const Contact = () => {
         subject: "",
         message: "",
       });
+      setError("");
 
       setTimeout(() => {
         setSubmitStatus(null);
       }, 5000);
     } catch (err) {
       console.error("Error sending message:", err);
-      setSubmitStatus("error");
+      
+      // Track failed attempt for rate limiting
+      setFailedAttempts(prev => prev + 1);
+      setLastAttemptTime(Date.now());
+      
+      // Check if this failed attempt triggers rate limiting
+      if (failedAttempts + 1 >= MAX_ATTEMPTS) {
+        setIsRateLimited(true);
+        setError("Too many failed attempts. Please try again later.");
+      } else {
+        setSubmitStatus("error");
+        setError("Failed to send message. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -193,6 +254,22 @@ const Contact = () => {
                         <p className="text-green-600 text-sm">
                           Thank you for your message. We'll get back to you soon.
                         </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6 animate-scaleIn">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                        <i className="fas fa-exclamation-circle text-red-500 text-lg"></i>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-red-800">
+                          {isRateLimited ? "Rate Limit Exceeded" : "Validation Error"}
+                        </h4>
+                        <p className="text-red-600 text-sm">{error}</p>
                       </div>
                     </div>
                   </div>

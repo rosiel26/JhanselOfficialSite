@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, useLocation, Link } from "react-router-dom";
+import { getPasswordStrength, validatePassword } from "../lib/security";
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -10,12 +11,26 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [showWarning, setShowWarning] = useState(false);
+  const [lastAttemptTime, setLastAttemptTime] = useState(null);
+  const [passwordStrength, setPasswordStrength] = useState(null);
 
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || "/admin";
+  const MAX_ATTEMPTS = 3;
+  const LOCKOUT_TIME = 5 * 60 * 1000; // 5 minutes
+
+  useEffect(() => {
+    // Check if user is locked out
+    if (lastAttemptTime && Date.now() - lastAttemptTime < LOCKOUT_TIME && failedAttempts >= MAX_ATTEMPTS) {
+      setShowWarning(true);
+      setError("Account temporarily locked due to multiple failed login attempts. Please try again later.");
+    }
+  }, [failedAttempts, lastAttemptTime]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -24,11 +39,19 @@ const Login = () => {
   }, [isAuthenticated, navigate, from]);
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
     setError("");
+    
+    // Calculate password strength when password field changes
+    if (name === "password" && value) {
+      setPasswordStrength(getPasswordStrength(value));
+    } else if (name === "password" && !value) {
+      setPasswordStrength(null);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -36,13 +59,37 @@ const Login = () => {
     setIsLoading(true);
     setError("");
 
+    // Check for lockout
+    if (lastAttemptTime && Date.now() - lastAttemptTime < LOCKOUT_TIME && failedAttempts >= MAX_ATTEMPTS) {
+      setError("Account temporarily locked due to multiple failed login attempts. Please try again later.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const success = await login(formData.email, formData.password);
 
       if (success) {
+        // Reset failed attempts on successful login
+        setFailedAttempts(0);
+        setShowWarning(false);
+        setLastAttemptTime(null);
         navigate(from, { replace: true });
       } else {
-        setError("Invalid email or password. Please try again.");
+        // Track failed attempt
+        const newAttempts = failedAttempts + 1;
+        setFailedAttempts(newAttempts);
+        setLastAttemptTime(Date.now());
+        
+        if (newAttempts >= MAX_ATTEMPTS) {
+          setError("Account temporarily locked due to multiple failed login attempts. All activities are being monitored for security purposes.");
+          setShowWarning(true);
+        } else if (newAttempts >= 2) {
+          setError(`Invalid credentials. Warning: Multiple failed attempts will result in account lockout. (${MAX_ATTEMPTS - newAttempts} attempts remaining)`);
+          setShowWarning(true);
+        } else {
+          setError("Invalid email or password. Please try again.");
+        }
       }
     } catch (err) {
       console.error("Login error:", err);
@@ -76,11 +123,34 @@ const Login = () => {
 
           {/* Form */}
           <div className="p-8">
+            {/* Error/Warning Display */}
             {error && (
-              <div className="bg-gray-100 border border-gray-300 rounded-xl p-4 mb-6 animate-scaleIn">
-                <div className="flex items-center">
-                  <i className="fas fa-exclamation-circle text-black mr-3"></i>
-                  <p className="text-black text-sm">{error}</p>
+              <div className={`border rounded-xl p-4 mb-6 animate-scaleIn ${
+                showWarning 
+                  ? "bg-red-50 border-red-300" 
+                  : "bg-gray-100 border-gray-300"
+              }`}>
+                <div className="flex items-start">
+                  {showWarning ? (
+                    <i className="fas fa-exclamation-triangle text-red-600 mr-3 mt-0.5"></i>
+                  ) : (
+                    <i className="fas fa-exclamation-circle text-black mr-3 mt-0.5"></i>
+                  )}
+                  <div>
+                    {showWarning && failedAttempts >= MAX_ATTEMPTS && (
+                      <p className="text-red-700 text-xs font-bold mb-1">
+                        ⚠ SECURITY ALERT: Unauthorized access attempt detected
+                      </p>
+                    )}
+                    {showWarning && failedAttempts >= 2 && failedAttempts < MAX_ATTEMPTS && (
+                      <p className="text-amber-700 text-xs font-bold mb-1">
+                        ⚠ WARNING: You are being monitored
+                      </p>
+                    )}
+                    <p className={`text-sm ${showWarning ? "text-red-700" : "text-black"}`}>
+                      {error}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -141,22 +211,26 @@ const Login = () => {
                 </div>
               </div>
 
-              {/* Remember & Forgot */}
-              <div className="flex items-center justify-between">
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
-                  />
-                  <span className="ml-2 text-sm text-gray-600">Remember me</span>
-                </label>
-                <a
-                  href="#"
-                  className="text-sm text-black hover:underline font-medium"
-                >
-                  Forgot password?
-                </a>
-              </div>
+              {/* Password Strength Indicator */}
+              {passwordStrength && formData.password && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-500">Password Strength:</span>
+                    <span className={`text-xs font-semibold text-${passwordStrength.color}-600`}>
+                      {passwordStrength.label}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 bg-${passwordStrength.color}-500`}
+                      style={{ width: `${passwordStrength.score}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    For admin accounts, use at least 8 characters with uppercase, lowercase, numbers, and special characters.
+                  </p>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button

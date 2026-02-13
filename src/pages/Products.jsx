@@ -43,7 +43,7 @@ const Products = () => {
         .from("products")
         .select("*")
         .eq("in_stock", true)
-        .order("created_at", { ascending: false });
+        .order("name", { ascending: true });
 
       if (error) throw error;
       setProducts(data || []);

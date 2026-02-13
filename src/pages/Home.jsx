@@ -132,7 +132,7 @@ const Home = () => {
                       <i className="fas fa-check text-white"></i>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-black">500+</p>
+                      <p className="text-sm font-semibold text-black">200+</p>
                       <p className="text-xs text-gray-500">Unique Designs</p>
                     </div>
                   </div>
@@ -184,7 +184,7 @@ const Home = () => {
             </span>
             <h2 className="section-title">What Our Customers Say</h2>
             <p className="section-subtitle mx-auto mt-4">
-              Real feedback from satisfied customers across the Philippines
+              Real feedback from satisfied customers across Bohol.
             </p>
           </div>
 

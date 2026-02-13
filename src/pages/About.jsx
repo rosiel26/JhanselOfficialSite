@@ -116,7 +116,7 @@ const About = () => {
               </p>
               <p className="text-gray-600 leading-relaxed">
                 Today, we are proud to be one of the leading cement pot
-                manufacturers in the Bohol, serving both residential and
+                manufacturers in Bohol, serving both residential and
                 commercial customers in entire province. Every pot we create carries the
                 legacy of traditional craftsmanship combined with modern
                 innovation.
